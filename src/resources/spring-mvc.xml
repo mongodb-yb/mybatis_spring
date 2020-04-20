@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:mvc="http://www.springframework.org/schema/mvc"
+       xmlns:mvn="http://www.springframework.org/schema/mvc"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans
+                        http://www.springframework.org/schema/beans/spring-beans-4.0.xsd http://www.springframework.org/schema/mvc http://www.springframework.org/schema/mvc/spring-mvc.xsd">
+
+    <!--注解驱动，自动扫描@Controller-->
+    <!--<mvc:annotation-driven/>-->
+    <!--消息转换器，定义对象转json支持-->
+    <mvc:annotation-driven>
+        <mvc:message-converters>
+            <!--避免返回string乱码-->
+            <bean class="org.springframework.http.converter.StringHttpMessageConverter">
+                <property name="supportedMediaTypes">
+                    <list>
+                        <value>text/plain;charset=UTF-8</value>
+                        <value>text/html;charset=UTF-8</value>
+                    </list>
+                </property>
+            </bean>
+            <!--json结果格式化-->
+            <bean class="org.springframework.http.converter.json.GsonHttpMessageConverter">
+                <property name="supportedMediaTypes">
+                    <list>
+                        <value>text/plain;charset=UTF-8</value>
+                        <value>application/json;charset=UTF-8</value>
+                    </list>
+                </property>
+                <property name="gson">
+                    <bean class="com.yubo.config.GsonFactoryBean"/>
+                </property>
+            </bean>
+        </mvc:message-converters>
+    </mvc:annotation-driven>
+    <!--拦截器配置-->
+    <!--<mvc:interceptors>
+        <bean class="com.tianxingshuke.interceptor.AuthorityInterceptor"></bean>
+    </mvc:interceptors>-->
+
+<!--    <mvn:interceptors>-->
+<!--        <mvc:interceptor>-->
+<!--            <mvc:mapping path=""/>-->
+<!--            <bean class=""/>-->
+<!--        </mvc:interceptor>-->
+<!--    </mvc:interceptors>-->
+
+</beans>

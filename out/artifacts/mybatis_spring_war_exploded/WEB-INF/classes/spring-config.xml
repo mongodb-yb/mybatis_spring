@@ -1,0 +1,132 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xmlns:context="http://www.springframework.org/schema/context" xmlns:tx="http://www.springframework.org/schema/tx"
+       xmlns:cache="http://www.springframework.org/schema/cache" xmlns:aop="http://www.springframework.org/schema/aop"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd http://www.springframework.org/schema/context https://www.springframework.org/schema/context/spring-context.xsd   http://www.springframework.org/schema/tx http://www.springframework.org/schema/tx/spring-tx.xsd http://www.springframework.org/schema/cache http://www.springframework.org/schema/cache/spring-cache.xsd http://www.springframework.org/schema/aop https://www.springframework.org/schema/aop/spring-aop.xsd">
+
+    <!--启动扫描机制-->
+    <context:annotation-config/>
+    <!--扫描对应的包-->
+    <context:component-scan base-package="com.yubo.*"/>
+    <!--引入配置文件  PropertyPlaceholderConfigurer 是低版本的jar包-->
+    <!--<bean id="property" class="org.springframework.beans.factory.config.PropertyPlaceholderConfigurer">-->
+    <!--<property name="location">-->
+    <!--<list>-->
+    <!--<value>classpath:jdbc.properties</value>-->
+    <!--</list>-->
+    <!--</property>-->
+    <!--</bean>-->
+    <!--引入配置文件-->
+    <context:property-placeholder location="classpath:jdbc.properties"/>
+    <!--配置数据库连接池,同时引入dbcp和common-pool两个jar包-->
+    <bean id="datasource" class="org.apache.commons.dbcp.BasicDataSource">
+        <property name="driverClassName" value="${jdbc.driver}"/>
+        <property name="url" value="${jdbc.url}"/>
+        <property name="username" value="${jdbc.username}"/>
+        <property name="password" value="${jdbc.password}"/>
+        <property name="maxActive" value="${jdbc.maxActive}"/>
+        <property name="minIdle" value="${jdbc.minIdle}"/>
+        <property name="maxWait" value="${jdbc.maxWait}"/>
+    </bean>
+    <!--配置spring事务管理器-->
+    <bean id="transactionManager" class="org.springframework.jdbc.datasource.DataSourceTransactionManager">
+        <property name="dataSource" ref="datasource"/>
+    </bean>
+    <!--使用注解使用事务-->
+    <tx:annotation-driven transaction-manager="transactionManager"/>
+
+    <!--集成mybatis，需要导入mybatis-spring的整合jar包-->
+    <!--可以不再使用mybatis-config.xml配置文件-->
+    <bean id="sqlSessionFactory" class="org.mybatis.spring.SqlSessionFactoryBean">
+        <property name="dataSource" ref="datasource"/>
+        <!--扫描xml-->
+        <property name="mapperLocations" value="classpath:mapping/*.xml"/>
+        <!--也可以引入配置文件-->
+        <!--<property name="configuration" value="classpath:mybatis-config.xml"/>-->
+    </bean>
+    <!--spring-mybatis-扫描mapper接口文件-->
+    <bean id="mapperScanner" class="org.mybatis.spring.mapper.MapperScannerConfigurer">
+        <property name="basePackage" value="com.yubo.dao.mapper"/>
+    </bean>
+    <!--配置redis连接池-->
+    <bean id="jedisPoolConfig" class="redis.clients.jedis.JedisPoolConfig">
+        <property name="maxIdle" value="50"/>
+        <property name="maxTotal" value="100"/>
+        <property name="maxWaitMillis" value="20000"/>
+    </bean>
+    <!--配置redis的连接工厂JedisConnectionFactory-->
+    <bean id="redisConnectionFactory" class="org.springframework.data.redis.connection.jedis.JedisConnectionFactory">
+        <!--代表服务器，如果是本机，可以不配置-->
+        <property name="hostName" value="localhost"/>
+        <!--redis的默认端口，可以不配置-->
+        <property name="port" value="6379"/>
+        <!--redis的连接池对象-->
+        <property name="poolConfig" ref="jedisPoolConfig"/>
+        <property name="password" value="123456"/>
+    </bean>
+    <!--配置RedisTemplate-->
+    <bean id="keySerializer" class="org.springframework.data.redis.serializer.StringRedisSerializer"/>
+    <!--如果要对redis的字符进行运算，则必须使用字符串序列化器-->
+    <!--    <bean id="valueSerializer" class="org.springframework.data.redis.serializer.JdkSerializationRedisSerializer"/>-->
+    <bean id="valueSerializer" class="org.springframework.data.redis.serializer.JdkSerializationRedisSerializer"/>
+    <bean id="redisTemplate" class="org.springframework.data.redis.core.RedisTemplate">
+        <!--redis连接工厂-->
+        <property name="connectionFactory" ref="redisConnectionFactory"/>
+        <property name="keySerializer" ref="keySerializer"/>
+        <property name="defaultSerializer" ref="keySerializer"/>
+        <!--value序列化器-->
+        <property name="valueSerializer" ref="valueSerializer"/>
+    </bean>
+    <!--单独指定StringRedisTemplate的key和value的序列化器-->
+    <bean id="stringTemplate" class="org.springframework.data.redis.core.StringRedisTemplate">
+        <property name="connectionFactory" ref="redisConnectionFactory"/>
+        <property name="keySerializer" ref="keySerializer"/>
+        <property name="valueSerializer" ref="keySerializer"/>
+    </bean>
+    <!--定义发布订阅的监听类-->
+    <bean id="messageListener" class="com.yubo.model.redis.RedisMessageListener">
+        <property name="redisTemplate" ref="redisTemplate"/>
+    </bean>
+    <!--定义监听容器-->
+    <!--依赖于连接池，才能继续监听-->
+    <bean id="threadTaskPool" class="org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler">
+        <property name="poolSize" value="3"/>
+    </bean>
+    <!--定义容器-->
+    <bean id="topicContainer" class="org.springframework.data.redis.listener.RedisMessageListenerContainer"
+          destroy-method="destroy">
+        <property name="connectionFactory" ref="redisConnectionFactory"/>
+        <!--连接池-->
+        <property name="taskExecutor" ref="threadTaskPool"/>
+        <!--消息监听-->
+        <property name="messageListeners">
+            <map>
+                <!--配置监听者来监听消息渠道，key-ref和监听的类的bean的id保持一致-->
+                <entry key-ref="messageListener">
+                    <!--定义消息渠道-->
+                    <bean class="org.springframework.data.redis.listener.ChannelTopic">
+                        <constructor-arg value="chat"/>
+                    </bean>
+                </entry>
+            </map>
+        </property>
+    </bean>
+    <!--将自定义缓存类放入容器-->
+    <bean id="selfCacheManager" class="com.yubo.dao.redis.RedisCache">
+        <property name="redisTemplate" ref="redisTemplate"/>
+        <property name="name" value="common"/>
+    </bean>
+    <!--使用Spring的缓存来自定义缓存管理器-->
+    <bean id="cacheManager" class="org.springframework.cache.support.SimpleCacheManager">
+        <property name="caches">
+            <set>
+                <ref bean="selfCacheManager"/>
+            </set>
+        </property>
+    </bean>
+    <!--开启缓存驱动-->
+    <cache:annotation-driven cache-manager="cacheManager"/>
+
+
+</beans>
